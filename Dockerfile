@@ -3,6 +3,9 @@
 
 FROM node:20-alpine
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Set working directory
 WORKDIR /app
 
@@ -21,9 +24,9 @@ ENV NODE_ENV=production
 # Expose API port
 EXPOSE 3001
 
-# Health check (using curl which is available in node:alpine)
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD node -e "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+    CMD curl -f http://localhost:3001/health || exit 1
 
 # Start the server
 CMD ["node", "src/index.js"]
