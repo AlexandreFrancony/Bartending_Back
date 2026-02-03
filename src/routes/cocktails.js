@@ -64,6 +64,56 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * POST /cocktails
+ * Create a new cocktail
+ * Body: { id?: string, name: string, image?: string, ingredients: array }
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { id, name, image, ingredients } = req.body;
+
+    if (!name || !ingredients || !Array.isArray(ingredients)) {
+      return res.status(400).json({
+        error: 'name and ingredients (array) are required'
+      });
+    }
+
+    // Generate ID from name if not provided (kebab-case)
+    const cocktailId = id || name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    // Check if cocktail already exists
+    const existing = await pool.query(
+      'SELECT id FROM cocktails WHERE id = $1',
+      [cocktailId]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        error: 'A cocktail with this ID already exists'
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO cocktails (id, name, image, ingredients, available)
+       VALUES ($1, $2, $3, $4, true)
+       RETURNING *`,
+      [cocktailId, name, image || null, JSON.stringify(ingredients)]
+    );
+
+    console.log(`✅ Created cocktail: ${cocktailId}`);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error POST /cocktails:', error.message);
+    res.status(500).json({ error: 'Failed to create cocktail' });
+  }
+});
+
+/**
  * PATCH /cocktails/:id
  * Update cocktail (availability, name, ingredients)
  * Body: { available?: boolean, name?: string, ingredients?: array }
