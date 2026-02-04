@@ -1,6 +1,7 @@
 // Cocktails routes
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -65,10 +66,10 @@ router.get('/:id', async (req, res) => {
 
 /**
  * POST /cocktails
- * Create a new cocktail
+ * Create a new cocktail (admin only)
  * Body: { id?: string, name: string, image?: string, ingredients: array }
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id, name, image, ingredients } = req.body;
 
@@ -115,10 +116,10 @@ router.post('/', async (req, res) => {
 
 /**
  * PATCH /cocktails/:id
- * Update cocktail (availability, name, ingredients)
+ * Update cocktail (availability, name, ingredients) (admin only)
  * Body: { available?: boolean, name?: string, ingredients?: array }
  */
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { available, name, ingredients } = req.body;

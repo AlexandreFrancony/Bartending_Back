@@ -1,6 +1,7 @@
 // Ingredients routes
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -23,10 +24,10 @@ router.get('/', async (req, res) => {
 
 /**
  * PATCH /ingredients/:id
- * Update ingredient stock status
+ * Update ingredient stock status (admin only)
  * Body: { in_stock: boolean }
  */
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { in_stock } = req.body;
@@ -56,10 +57,10 @@ router.patch('/:id', async (req, res) => {
 
 /**
  * POST /ingredients/toggle
- * Toggle stock status for an ingredient by name
+ * Toggle stock status for an ingredient by name (admin only)
  * Body: { name: string, in_stock: boolean }
  */
-router.post('/toggle', async (req, res) => {
+router.post('/toggle', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, in_stock } = req.body;
 
@@ -88,10 +89,10 @@ router.post('/toggle', async (req, res) => {
 
 /**
  * POST /ingredients/bulk-update
- * Update multiple ingredients at once
+ * Update multiple ingredients at once (admin only)
  * Body: { ingredients: [{ id: number, in_stock: boolean }] }
  */
-router.post('/bulk-update', async (req, res) => {
+router.post('/bulk-update', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { ingredients } = req.body;
 
@@ -130,10 +131,10 @@ router.post('/bulk-update', async (req, res) => {
 
 /**
  * POST /ingredients
- * Add a new ingredient
+ * Add a new ingredient (admin only)
  * Body: { name: string, in_stock?: boolean }
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, in_stock = true } = req.body;
 

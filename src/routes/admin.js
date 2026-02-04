@@ -1,8 +1,13 @@
 // Admin routes
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+
+// All admin routes require authentication and admin role
+router.use(authenticateToken);
+router.use(requireAdmin);
 
 /**
  * GET /admin/stats
@@ -14,14 +19,14 @@ router.get('/stats', async (req, res) => {
     const [
       cocktailsResult,
       availableResult,
-      customersResult,
+      usersResult,
       ordersResult,
       pendingResult,
       todayResult
     ] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM cocktails'),
       pool.query('SELECT COUNT(*) FROM cocktails WHERE available = true'),
-      pool.query('SELECT COUNT(*) FROM customers'),
+      pool.query('SELECT COUNT(*) FROM users'),
       pool.query('SELECT COUNT(*) FROM orders'),
       pool.query("SELECT COUNT(*) FROM orders WHERE status = 'pending'"),
       pool.query(`
@@ -33,14 +38,14 @@ router.get('/stats', async (req, res) => {
     res.json({
       totalCocktails: parseInt(cocktailsResult.rows[0].count),
       availableCocktails: parseInt(availableResult.rows[0].count),
-      totalCustomers: parseInt(customersResult.rows[0].count),
+      totalUsers: parseInt(usersResult.rows[0].count),
       totalOrders: parseInt(ordersResult.rows[0].count),
       pendingOrders: parseInt(pendingResult.rows[0].count),
       todayOrders: parseInt(todayResult.rows[0].count)
     });
   } catch (error) {
     console.error('Error GET /admin/stats:', error.message);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
   }
 });
 
@@ -67,7 +72,7 @@ router.get('/orders/summary', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error GET /admin/orders/summary:', error.message);
-    res.status(500).json({ error: 'Failed to fetch order summary' });
+    res.status(500).json({ error: 'Erreur lors de la récupération du résumé' });
   }
 });
 
@@ -95,7 +100,7 @@ router.get('/cocktails/popular', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error GET /admin/cocktails/popular:', error.message);
-    res.status(500).json({ error: 'Failed to fetch popular cocktails' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des cocktails populaires' });
   }
 });
 
@@ -110,7 +115,7 @@ router.post('/cocktails/toggle-availability', async (req, res) => {
 
     if (!Array.isArray(cocktailIds) || typeof available !== 'boolean') {
       return res.status(400).json({
-        error: 'cocktailIds (array) and available (boolean) are required'
+        error: 'cocktailIds (array) et available (boolean) sont requis'
       });
     }
 
@@ -128,7 +133,7 @@ router.post('/cocktails/toggle-availability', async (req, res) => {
     });
   } catch (error) {
     console.error('Error POST /admin/cocktails/toggle-availability:', error.message);
-    res.status(500).json({ error: 'Failed to update availability' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
   }
 });
 

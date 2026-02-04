@@ -1,15 +1,17 @@
 // Orders routes
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
 /**
  * GET /orders
- * List all orders with customer and cocktail info
+ * List all orders with user and cocktail info
+ * Admin only - regular users can only see their own orders via /orders/my
  * Query params: ?status=pending|preparing|ready|completed|cancelled
  */
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -20,14 +22,14 @@ router.get('/', async (req, res) => {
         o.notes,
         o.created_at,
         o.completed_at,
-        o.customer_id,
-        c.name as customer_name,
+        o.user_id,
+        u.username as user_name,
         o.cocktail_id,
         ck.name as cocktail_name,
         ck.image as cocktail_image,
         ck.ingredients as cocktail_ingredients
       FROM orders o
-      JOIN customers c ON o.customer_id = c.id
+      JOIN users u ON o.user_id = u.id
       JOIN cocktails ck ON o.cocktail_id = ck.id
     `;
 
@@ -44,22 +46,54 @@ router.get('/', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error GET /orders:', error.message);
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des commandes' });
+  }
+});
+
+/**
+ * GET /orders/my
+ * List current user's orders
+ * Requires authentication
+ */
+router.get('/my', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        o.id,
+        o.status,
+        o.notes,
+        o.created_at,
+        o.completed_at,
+        o.cocktail_id,
+        ck.name as cocktail_name,
+        ck.image as cocktail_image
+      FROM orders o
+      JOIN cocktails ck ON o.cocktail_id = ck.id
+      WHERE o.user_id = $1
+      ORDER BY o.created_at DESC
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error GET /orders/my:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la récupération de vos commandes' });
   }
 });
 
 /**
  * POST /orders
- * Create a new order
- * Body: { customerName, cocktailId, notes? }
+ * Create a new order for the authenticated user
+ * Requires authentication
+ * Body: { cocktailId, notes? }
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { customerName, cocktailId, notes } = req.body;
+    const { cocktailId, notes } = req.body;
+    const userId = req.user.id;
 
     // Validation
-    if (!customerName || !cocktailId) {
-      return res.status(400).json({ error: 'customerName and cocktailId are required' });
+    if (!cocktailId) {
+      return res.status(400).json({ error: 'cocktailId est requis' });
     }
 
     // Verify cocktail exists and is available
@@ -69,61 +103,42 @@ router.post('/', async (req, res) => {
     );
 
     if (cocktailResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Cocktail not found' });
+      return res.status(404).json({ error: 'Cocktail non trouvé' });
     }
 
     const cocktail = cocktailResult.rows[0];
     if (!cocktail.available) {
-      return res.status(400).json({ error: 'Cocktail is not available' });
-    }
-
-    // Find or create customer
-    let customerResult = await pool.query(
-      'SELECT * FROM customers WHERE LOWER(name) = LOWER($1)',
-      [customerName.trim()]
-    );
-
-    let customerId;
-    if (customerResult.rows.length === 0) {
-      // Create new customer
-      customerResult = await pool.query(
-        'INSERT INTO customers (name) VALUES ($1) RETURNING *',
-        [customerName.trim()]
-      );
-      customerId = customerResult.rows[0].id;
-      console.log(`✅ New customer: ${customerName.trim()}`);
-    } else {
-      customerId = customerResult.rows[0].id;
+      return res.status(400).json({ error: 'Ce cocktail n\'est pas disponible' });
     }
 
     // Create order
     const orderResult = await pool.query(`
-      INSERT INTO orders (customer_id, cocktail_id, notes, status)
+      INSERT INTO orders (user_id, cocktail_id, notes, status)
       VALUES ($1, $2, $3, 'pending')
       RETURNING *
-    `, [customerId, cocktailId, notes || null]);
+    `, [userId, cocktailId, notes || null]);
 
-    console.log(`✅ Order: ${customerName} → ${cocktail.name}`);
+    console.log(`✅ Order: ${req.user.username} → ${cocktail.name}`);
 
     // Return order with full details
     res.status(201).json({
       ...orderResult.rows[0],
-      customer_name: customerName.trim(),
+      user_name: req.user.username,
       cocktail_name: cocktail.name,
       cocktail_image: cocktail.image
     });
   } catch (error) {
     console.error('Error POST /orders:', error.message);
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ error: 'Erreur lors de la création de la commande' });
   }
 });
 
 /**
  * PATCH /orders/:id
- * Update order status
+ * Update order status (admin only)
  * Body: { status: 'pending'|'preparing'|'ready'|'completed'|'cancelled' }
  */
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -131,7 +146,7 @@ router.patch('/:id', async (req, res) => {
     const validStatuses = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
-        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        error: `Statut invalide. Doit être: ${validStatuses.join(', ')}`
       });
     }
 
@@ -143,22 +158,22 @@ router.patch('/:id', async (req, res) => {
     `, [status, id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ error: 'Commande non trouvée' });
     }
 
     console.log(`✅ Order ${id} → ${status}`);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error PATCH /orders/:id:', error.message);
-    res.status(500).json({ error: 'Failed to update order' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
   }
 });
 
 /**
  * DELETE /orders/:id
- * Delete a specific order
+ * Delete a specific order (admin only)
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -168,22 +183,22 @@ router.delete('/:id', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ error: 'Commande non trouvée' });
     }
 
     console.log(`✅ Deleted order: ${id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('Error DELETE /orders/:id:', error.message);
-    res.status(500).json({ error: 'Failed to delete order' });
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
 
 /**
  * DELETE /orders
- * Delete all orders (admin function)
+ * Delete all orders (admin only)
  */
-router.delete('/', async (req, res) => {
+router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM orders RETURNING id');
 
@@ -191,7 +206,7 @@ router.delete('/', async (req, res) => {
     res.json({ success: true, deletedCount: result.rowCount });
   } catch (error) {
     console.error('Error DELETE /orders:', error.message);
-    res.status(500).json({ error: 'Failed to delete orders' });
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
 
