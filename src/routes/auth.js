@@ -169,7 +169,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, username, email, role, created_at
+      `SELECT id, username, email, role, favorites, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -182,6 +182,113 @@ router.get('/me', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error GET /auth/me:', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET /auth/favorites
+ * Get current user's favorites
+ * Requires: Bearer token
+ * Returns: { favorites: string[] }
+ */
+router.get('/favorites', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT favorites FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    res.json({ favorites: result.rows[0].favorites || [] });
+  } catch (error) {
+    console.error('Error GET /auth/favorites:', error.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
+ * PUT /auth/favorites
+ * Update current user's favorites (replace entire list)
+ * Requires: Bearer token
+ * Body: { favorites: string[] }
+ */
+router.put('/favorites', authenticateToken, async (req, res) => {
+  try {
+    const { favorites } = req.body;
+
+    if (!Array.isArray(favorites)) {
+      return res.status(400).json({ error: 'favorites doit être un tableau' });
+    }
+
+    // Validate all items are strings
+    if (!favorites.every((f) => typeof f === 'string')) {
+      return res.status(400).json({ error: 'Tous les favoris doivent être des chaînes' });
+    }
+
+    await pool.query(
+      'UPDATE users SET favorites = $1 WHERE id = $2',
+      [JSON.stringify(favorites), req.user.id]
+    );
+
+    res.json({ favorites });
+  } catch (error) {
+    console.error('Error PUT /auth/favorites:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour des favoris' });
+  }
+});
+
+/**
+ * POST /auth/favorites/:cocktailId
+ * Add a cocktail to favorites
+ * Requires: Bearer token
+ */
+router.post('/favorites/:cocktailId', authenticateToken, async (req, res) => {
+  try {
+    const { cocktailId } = req.params;
+
+    // Add to favorites if not already present
+    const result = await pool.query(
+      `UPDATE users
+       SET favorites = CASE
+         WHEN NOT favorites @> $1::jsonb THEN favorites || $1::jsonb
+         ELSE favorites
+       END
+       WHERE id = $2
+       RETURNING favorites`,
+      [JSON.stringify(cocktailId), req.user.id]
+    );
+
+    res.json({ favorites: result.rows[0].favorites });
+  } catch (error) {
+    console.error('Error POST /auth/favorites/:cocktailId:', error.message);
+    res.status(500).json({ error: 'Erreur lors de l\'ajout aux favoris' });
+  }
+});
+
+/**
+ * DELETE /auth/favorites/:cocktailId
+ * Remove a cocktail from favorites
+ * Requires: Bearer token
+ */
+router.delete('/favorites/:cocktailId', authenticateToken, async (req, res) => {
+  try {
+    const { cocktailId } = req.params;
+
+    const result = await pool.query(
+      `UPDATE users
+       SET favorites = favorites - $1
+       WHERE id = $2
+       RETURNING favorites`,
+      [JSON.stringify(cocktailId), req.user.id]
+    );
+
+    res.json({ favorites: result.rows[0].favorites });
+  } catch (error) {
+    console.error('Error DELETE /auth/favorites/:cocktailId:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression du favori' });
   }
 });
 
