@@ -2,12 +2,15 @@
 
 REST API backend for the Tipsy cocktail ordering application. Built with Express.js and PostgreSQL.
 
+[![Live](https://img.shields.io/badge/api-tipsy.francony.fr/api-brightgreen)](https://tipsy.francony.fr/api/health)
+
 ## Features
 
-- **RESTful API** - Clean REST endpoints for cocktails, orders, ingredients, and users
+- **RESTful API** - Clean REST endpoints for cocktails, orders, and users
 - **JWT Authentication** - Secure token-based authentication with bcrypt password hashing
-- **Role-based Access** - Admin, bartender, and guest role support
-- **Rate Limiting** - Protection against abuse with configurable rate limits
+- **Role-based Access** - Admin and user role support
+- **Password Reset** - Email-based password reset with OVH SMTP
+- **Rate Limiting** - Protection against abuse on auth endpoints
 - **Security Hardened** - Helmet.js for security headers, CORS configuration
 - **Health Checks** - Docker-compatible health endpoint for orchestration
 - **Graceful Shutdown** - Proper cleanup on SIGTERM
@@ -18,53 +21,44 @@ REST API backend for the Tipsy cocktail ordering application. Built with Express
 - **Framework**: Express.js 4.x
 - **Database**: PostgreSQL (via pg driver)
 - **Authentication**: JWT (jsonwebtoken) + bcrypt
+- **Email**: Nodemailer with OVH SMTP
 - **Security**: Helmet, CORS, express-rate-limit
 
 ## API Endpoints
 
-### Authentication
+### Authentication (`/auth`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/auth/register` | Register a new user |
 | POST | `/auth/login` | Login and receive JWT token |
+| GET | `/auth/me` | Get current user profile |
+| POST | `/auth/change-password` | Change password |
+| POST | `/auth/forgot-password` | Request password reset email |
+| POST | `/auth/reset-password` | Reset password with token |
 
-### Cocktails
+### Cocktails (`/cocktails`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/cocktails` | List all cocktails |
 | GET | `/cocktails/:id` | Get cocktail details |
-| POST | `/cocktails` | Create cocktail (admin) |
-| PATCH | `/cocktails/:id` | Update cocktail (admin) |
-| DELETE | `/cocktails/:id` | Delete cocktail (admin) |
+| PATCH | `/cocktails/:id` | Update availability (admin) |
 
-### Orders
+### Orders (`/orders`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/orders` | List orders (filtered by role) |
+| GET | `/orders` | List all orders (admin, filterable) |
+| GET | `/orders/my` | Current user's orders |
 | POST | `/orders` | Create a new order |
-| PATCH | `/orders/:id` | Update order status |
+| PATCH | `/orders/:id` | Update order status (admin) |
 | DELETE | `/orders/:id` | Cancel order |
 
-### Ingredients
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/ingredients` | List all ingredients |
-| POST | `/ingredients` | Create ingredient (admin) |
-| PATCH | `/ingredients/:id` | Update ingredient (admin) |
-| DELETE | `/ingredients/:id` | Delete ingredient (admin) |
-
-### Users
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/users` | List users (admin) |
-| GET | `/users/me` | Get current user profile |
-| PATCH | `/users/:id` | Update user (admin) |
-
-### Admin
+### Admin (`/admin`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/admin/stats` | Dashboard statistics |
-| POST | `/admin/promote/:id` | Promote user to admin |
+| GET | `/admin/orders/summary` | Orders grouped by status |
+| GET | `/admin/cocktails/popular` | Top ordered cocktails |
+| POST | `/admin/cocktails/toggle-availability` | Bulk update availability |
 
 ### Health
 | Method | Endpoint | Description |
@@ -85,7 +79,6 @@ Bartending_Back/
 │   │   ├── admin.js         # Admin endpoints
 │   │   ├── auth.js          # Authentication endpoints
 │   │   ├── cocktails.js     # Cocktail CRUD
-│   │   ├── ingredients.js   # Ingredient CRUD
 │   │   ├── orders.js        # Order management
 │   │   └── users.js         # User management
 │   └── index.js             # Application entry point
@@ -107,7 +100,7 @@ Bartending_Back/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/Bartending_Back.git
+   git clone https://github.com/AlexandreFrancony/Bartending_Back.git
    cd Bartending_Back
    ```
 
@@ -146,6 +139,10 @@ docker run -p 3001:3001 --env-file .env tipsy-api
 | `JWT_SECRET` | Secret key for JWT tokens | Required |
 | `JWT_EXPIRES_IN` | Token expiration time | `7d` |
 | `FRONTEND_URL` | Allowed CORS origin | `*` |
+| `SMTP_HOST` | SMTP server | `ssl0.ovh.net` |
+| `SMTP_PORT` | SMTP port | `465` |
+| `SMTP_USER` | SMTP username | - |
+| `SMTP_PASS` | SMTP password | - |
 
 ### Generating a JWT Secret
 
@@ -163,9 +160,8 @@ Authorization: Bearer <your-jwt-token>
 
 ### User Roles
 
-- **guest** - Can view cocktails and place orders
-- **bartender** - Can manage orders
-- **admin** - Full access to all endpoints
+- **user** - Can view cocktails and place orders
+- **admin** - Full access to all endpoints (user "Bloster")
 
 ## Rate Limiting
 
@@ -174,9 +170,10 @@ Authorization: Bearer <your-jwt-token>
 
 ## Related Repositories
 
-- [Bartending_Front](https://github.com/yourusername/Bartending_Front) - React frontend
-- [Bartending_DB](https://github.com/yourusername/Bartending_DB) - Database migrations
-- [Bartending_Deploy](https://github.com/yourusername/Bartending_Deploy) - Docker deployment
+- [Bartending_Front](https://github.com/AlexandreFrancony/Bartending_Front) - React frontend
+- [Bartending_DB](https://github.com/AlexandreFrancony/Bartending_DB) - Database schema
+- [Bartending_Deploy](https://github.com/AlexandreFrancony/Bartending_Deploy) - Docker deployment
+- [Infra](https://github.com/AlexandreFrancony/Infra) - Central reverse proxy
 
 ## License
 
