@@ -48,7 +48,7 @@ app.use(helmet());
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL || true // Allow configured frontend or all in production if not set
+    ? process.env.FRONTEND_URL || 'https://tipsy.francony.fr'
     : true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
