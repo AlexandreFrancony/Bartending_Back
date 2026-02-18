@@ -38,6 +38,9 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// Trust reverse proxy (Pangolin/Traefik) for correct client IP detection
+app.set('trust proxy', 1);
+
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
