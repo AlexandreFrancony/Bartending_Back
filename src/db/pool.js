@@ -12,9 +12,13 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// Log connection events
+// Log connection events (only first connection, avoid spam from health checks)
+let connectionCount = 0;
 pool.on('connect', () => {
-  console.log('📦 New database connection established');
+  connectionCount++;
+  if (connectionCount <= 1) {
+    console.log('📦 Database connection pool initialized');
+  }
 });
 
 pool.on('error', (err) => {
