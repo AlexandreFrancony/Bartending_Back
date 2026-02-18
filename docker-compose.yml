@@ -1,8 +1,7 @@
-# Bartending V2 - Backend with Database
-# Development docker-compose for running backend + DB together
+# Bartending V2 - Backend API
+# Uses the centralized PostgreSQL from Infra
 
 services:
-  # Backend API
   api:
     build:
       context: .
@@ -12,17 +11,12 @@ services:
 
     environment:
       PORT: 3001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-bartender}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bartending}
-      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bartender}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bartending}
+      NODE_ENV: ${NODE_ENV:-production}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-https://tipsy.francony.fr}
 
-    ports:
-      - "${API_PORT:-3001}:3001"
-
-    depends_on:
-      db:
-        condition: service_healthy
-
-    # Resource limits for Raspberry Pi
     deploy:
       resources:
         limits:
@@ -36,44 +30,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: bartending_db
-    restart: unless-stopped
-
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-bartender}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
-      POSTGRES_DB: ${POSTGRES_DB:-bartending}
-
-    ports:
-      - "${DB_PORT:-5432}:5432"
-
-    volumes:
-      - bartending_db_data:/var/lib/postgresql/data
-      # Mount init scripts from DB repo (adjust path as needed)
-      - ../Bartending_DB/init:/docker-entrypoint-initdb.d:ro
-
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bartender} -d ${POSTGRES_DB:-bartending}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
-volumes:
-  bartending_db_data:
-    driver: local
-
 networks:
   default:
     name: bartending_network
-    driver: bridge
+    external: true
